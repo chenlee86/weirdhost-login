@@ -1069,8 +1069,9 @@ def process_single_account(sb, account, account_index):
     print(f"[INFO] [步骤2] 注入 Cookie 并登录...")
 
     def inject_and_check(value, label):
+        # 只删除同名 remember_web cookie,保留 cf_clearance 等,避免重新触发 Cloudflare 验证
         try:
-            sb.delete_all_cookies()
+            sb.driver.delete_cookie(cookie_name)
         except Exception:
             pass
         sb.add_cookie({"name": cookie_name, "value": value, "domain": DOMAIN, "path": "/"})
