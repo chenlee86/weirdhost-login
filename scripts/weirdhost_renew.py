@@ -1068,6 +1068,15 @@ def process_single_account(sb, account, account_index):
     # Step 2: 注入 Cookie 并登录
     print(f"[INFO] [步骤2] 注入 Cookie 并登录...")
 
+    def cookie_present(where):
+        try:
+            got = next((c for c in sb.get_cookies() if c.get("name") == cookie_name), None)
+            print(f"[INFO]   [{where}] URL={sb.get_current_url()} | remember_web={'在' if got else '丢失'}")
+            return bool(got)
+        except Exception as e:
+            print(f"[WARN]   读 Cookie 失败({where}): {e}")
+            return False
+
     def inject_and_check(value, label):
         # 只删除同名 remember_web cookie,保留 cf_clearance 等,避免重新触发 Cloudflare 验证
         try:
@@ -1075,19 +1084,18 @@ def process_single_account(sb, account, account_index):
         except Exception:
             pass
         sb.add_cookie({"name": cookie_name, "value": value, "domain": DOMAIN, "path": "/"})
-        try:
-            got = next((c for c in sb.get_cookies() if c.get("name") == cookie_name), None)
-            print(f"[INFO]   [{label}] 注入长度={len(value)} | 读回={'成功' if got else '失败'}"
-                  + (f" 长度={len(got.get('value',''))}" if got else ""))
-        except Exception as e:
-            print(f"[WARN]   读回 Cookie 失败: {e}")
-        sb.uc_open_with_reconnect(f"https://{DOMAIN}/", reconnect_time=5)
+        print(f"[INFO]   [{label}] 注入长度={len(value)}")
+        cookie_present("注入后")
+        # 用普通 open 刷新(不用 uc reconnect,避免重连丢 cookie);cf_clearance 已在,一般不再触发 CF
+        sb.open(f"https://{DOMAIN}/")
         time.sleep(3)
+        cookie_present("打开首页后")
         handle_turnstile(sb)
         if is_logged_in(sb):
             return True
-        sb.uc_open_with_reconnect(f"https://{DOMAIN}/server/", reconnect_time=5)
+        sb.open(f"https://{DOMAIN}/server/")
         time.sleep(3)
+        cookie_present("打开server页后")
         handle_turnstile(sb)
         return is_logged_in(sb)
 
