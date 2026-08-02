@@ -1300,6 +1300,7 @@ def add_server_time():
             test=True,
             locale="ko",
             headless=False,
+            proxy=os.environ.get("PROXY") or None,
             chromium_arg="--disable-dev-shm-usage,--no-sandbox,--disable-gpu,--disable-software-rasterizer,--disable-background-timer-throttling"
         ) as sb:
             print("\n[INFO] 浏览器已启动")
