@@ -141,7 +141,8 @@ def parse_weirdhost_cookie(cookie_str):
     if "=" in cookie_str:
         parts = cookie_str.split("=", 1)
         if len(parts) == 2:
-            return (parts[0].strip(), unquote(parts[1].strip()))
+            # 保留原始(URL 编码)值,浏览器里存的就是编码形式,注入时用原始值
+            return (parts[0].strip(), parts[1].strip())
     return (None, None)
 
 
@@ -1066,18 +1067,36 @@ def process_single_account(sb, account, account_index):
 
     # Step 2: 注入 Cookie 并登录
     print(f"[INFO] [步骤2] 注入 Cookie 并登录...")
-    sb.add_cookie({"name": cookie_name, "value": cookie_value, "domain": DOMAIN, "path": "/"})
-    sb.uc_open_with_reconnect(f"https://{DOMAIN}/", reconnect_time=5)
-    time.sleep(3)
-    if not handle_turnstile(sb):
-        print(f"[WARN]   Cookie 注入后二次验证未通过")
 
-    if not is_logged_in(sb):
-        print("[WARN]   未检测到登录状态，尝试刷新...")
+    def inject_and_check(value, label):
+        try:
+            sb.delete_all_cookies()
+        except Exception:
+            pass
+        sb.add_cookie({"name": cookie_name, "value": value, "domain": DOMAIN, "path": "/"})
+        try:
+            got = next((c for c in sb.get_cookies() if c.get("name") == cookie_name), None)
+            print(f"[INFO]   [{label}] 注入长度={len(value)} | 读回={'成功' if got else '失败'}"
+                  + (f" 长度={len(got.get('value',''))}" if got else ""))
+        except Exception as e:
+            print(f"[WARN]   读回 Cookie 失败: {e}")
+        sb.uc_open_with_reconnect(f"https://{DOMAIN}/", reconnect_time=5)
+        time.sleep(3)
+        handle_turnstile(sb)
+        if is_logged_in(sb):
+            return True
         sb.uc_open_with_reconnect(f"https://{DOMAIN}/server/", reconnect_time=5)
         time.sleep(3)
-        if not handle_turnstile(sb):
-            print(f"[WARN]   刷新后二次验证未通过")
+        handle_turnstile(sb)
+        return is_logged_in(sb)
+
+    # 先用原始(URL 编码)值,失败再试解码后的值
+    ok = inject_and_check(cookie_value, "原始值")
+    if not ok:
+        decoded = unquote(cookie_value)
+        if decoded != cookie_value:
+            print("[WARN]   原始值登录失败，改用 URL 解码值重试...")
+            ok = inject_and_check(decoded, "解码值")
 
     if not is_logged_in(sb):
         ss_path = f"acc{account_index+1}_login_fail.png"
