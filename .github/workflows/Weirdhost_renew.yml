@@ -33,30 +33,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install seleniumbase aiohttp pynacl
 
-      - name: 设置 Cloudflare WARP 代理
+      - name: 设置 NODE_LINK 代理 (sing-box)
+        env:
+          NODE_LINK: ${{ secrets.NODE_LINK }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: |
-          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-          sudo apt-get update
-          sudo apt-get install -y cloudflare-warp
-          sudo systemctl start warp-svc
-          sleep 3
-          warp-cli --accept-tos registration new
-          warp-cli --accept-tos mode proxy
-          warp-cli --accept-tos proxy port 40000
-          warp-cli --accept-tos connect
-          for i in $(seq 1 12); do
-            sleep 5
-            trace=$(curl -s --max-time 10 --proxy socks5://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace || true)
-            if echo "$trace" | grep -q "warp=on"; then
-              echo "$trace" | grep -E "warp=|ip="
-              echo "✅ WARP proxy ready"
-              exit 0
-            fi
-            echo "waiting for WARP... ($i)"
-          done
-          echo "❌ WARP proxy not ready after 60s"
-          exit 1
+          chmod +x scripts/setup_proxy.sh
+          if ! bash scripts/setup_proxy.sh; then
+            echo "❌ 代理设置失败，发送通知..."
+            curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+              -d chat_id="${TG_CHAT_ID}" \
+              -d text="❌ Weirdhost 续期失败：NODE_LINK 代理不可用" \
+              --max-time 10 || true
+            exit 1
+          fi
 
       - name: 运行续期脚本
         env:
@@ -69,7 +60,7 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PROXY: socks5://127.0.0.1:40000
+          PROXY: socks5://127.0.0.1:1080
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python scripts/weirdhost_renew.py
 
