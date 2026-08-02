@@ -1069,11 +1069,15 @@ def process_single_account(sb, account, account_index):
     sb.add_cookie({"name": cookie_name, "value": cookie_value, "domain": DOMAIN, "path": "/"})
     sb.uc_open_with_reconnect(f"https://{DOMAIN}/", reconnect_time=5)
     time.sleep(3)
+    if not handle_turnstile(sb):
+        print(f"[WARN]   Cookie 注入后二次验证未通过")
 
     if not is_logged_in(sb):
         print("[WARN]   未检测到登录状态，尝试刷新...")
         sb.uc_open_with_reconnect(f"https://{DOMAIN}/server/", reconnect_time=5)
         time.sleep(3)
+        if not handle_turnstile(sb):
+            print(f"[WARN]   刷新后二次验证未通过")
 
     if not is_logged_in(sb):
         ss_path = f"acc{account_index+1}_login_fail.png"
